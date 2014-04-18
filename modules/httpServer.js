@@ -45,8 +45,8 @@ exports.create = function(datastore, options) {
         req.setEncoding('ascii');
 
         var params = url.parse(req.url, true);
-        var timeout = params.query.timeout || 0;
-        datastore.receive(req.params.channel, timeout, function(err, result) {
+        var timeout = params.query.timeout || -1;
+        (params.peek ? datastore.peek : datastore.receive)(req.params.channel, timeout, function(err, result) {
             if (err) {
                 res.send(500, err);
             } else if (result == null) {
@@ -73,6 +73,93 @@ exports.create = function(datastore, options) {
         })
     });
 
+    httpServer.put('/channel/:channel/:uuid', function(req, res, next) {
+        datastore.touch(req.params.channel, req.params.uuid, function(err, result) {
+            if (err) {
+                res.send(500, err);
+            } else if (!result) {
+                res.send(404, 'UUID not found in channel');
+            } else {
+                res.send(200, result);
+            }
+            next();
+        })
+    });
+
+    httpServer.post('/queue/:channel', function(req, res, next) {
+        req.setEncoding('ascii');
+
+        var data = '';
+        req.on('data', function(chunk) {
+            data = data + chunk;
+        });
+        req.on('end', function() {
+            datastore.put(req.params.channel, data, function(err, result) {
+                if (err) {
+                    res.send(500, err);
+                } else {
+                    res.send(result);
+                }
+                next();
+            })
+        })
+    });
+
+    httpServer.get('/queue/:channel', function(req, res, next) {
+        req.setEncoding('ascii');
+
+        var params = url.parse(req.url, true);
+        var timeout = params.query.timeout || -1;
+        datastore.take(req.params.channel, timeout, function(err, result) {
+            if (err) {
+                res.send(500, err);
+            } else if (result == null) {
+                res.send(404, 'Timed out waiting for message');
+            } else {
+                res.send(result);
+            }
+            next();
+        });
+    });
+
+    httpServer.post('/queue/:channel/:uuid', function(req, res, next) {
+        req.setEncoding('ascii');
+
+        var data = '';
+        req.on('data', function(chunk) {
+            data = data + chunk;
+        });
+        req.on('end', function() {
+            datastore.respond(req.params.channel, req.params.uuid, data, function(err, uuid) {
+                if (err) {
+                    res.send(500, err);
+                } else if (uuid == null) {
+                    res.send(404, 'UUID not found in channel');
+                } else {
+                    res.send({uuid: uuid});
+                }
+                next();
+            });
+        })
+    });
+
+    httpServer.get('/queue/response/:uuid', function(req, res, next) {
+        req.setEncoding('ascii');
+
+        var params = url.parse(req.url, true);
+        var timeout = params.query.timeout || -1;
+        datastore.wait(req.params.uuid, timeout, function(err, result) {
+            if (err) {
+                res.send(500, err);
+            } else if (result == null) {
+                res.send(404, 'Timed out waiting for message');
+            } else {
+                res.send(result.data);
+            }
+            next();
+        });
+    });
+
     var server = new Server(httpServer);
 
     httpServer.on('error', function(e) {
@@ -80,4 +167,4 @@ exports.create = function(datastore, options) {
     });
 
     return server;
-}
+};

@@ -7,7 +7,6 @@ var Pools = require('./modules/pools');
 var Datastore = require('./modules/datastore');
 var tcpServer = require('./modules/tcpServer');
 var httpServer = require('./modules/httpServer');
-var restify = require('restify');
 
 var pools = new Pools({default: {}});
 pools.init(function(err) {
@@ -22,8 +21,6 @@ pools.init(function(err) {
         restServer.listen(8000, function() {
             console.log('REST server started');
         });
-
         setInterval(function() { datastore.tick() }, 100000);
-
     }
 });

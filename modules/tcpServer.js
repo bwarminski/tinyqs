@@ -157,7 +157,7 @@ Client.prototype.respond = function() {
     this.args = [];
 
     if (arguments[0]) {
-        this.comm.write('-'+arguments[0]);
+        this.conn.write('-'+arguments[0]+'\r\n');
     } else {
         var rest = _.rest(arguments);
         this.conn.write('*'+rest.length+'\r\n');
