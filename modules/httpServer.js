@@ -23,11 +23,11 @@ exports.create = function(datastore, options) {
     var httpServer = restify.createServer(options);
 
     httpServer.post('/channel/:channel', function(req, res, next) {
-        req.setEncoding('ascii');
 
-        var data = '';
+
+        var data = new Buffer(0);
         req.on('data', function(chunk) {
-            data = data + chunk;
+            data = Buffer.concat([data, chunk], data.length + chunk.length);
         });
         req.on('end', function() {
             datastore.send(req.params.channel, data, function(err, uuid) {
@@ -42,8 +42,6 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.get('/channel/:channel', function(req, res, next) {
-        req.setEncoding('ascii');
-
         var params = url.parse(req.url, true);
         var timeout = params.query.timeout || -1;
         (params.peek ? datastore.peek : datastore.receive)(req.params.channel, timeout, function(err, result) {
@@ -59,8 +57,6 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.del('/channel/:channel/:uuid', function(req, res, next) {
-        req.setEncoding('ascii');
-
         datastore.delete(req.params.channel, req.params.uuid, function(err, result) {
             if (err) {
                 res.send(500, err);
@@ -87,11 +83,9 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.post('/queue/:channel', function(req, res, next) {
-        req.setEncoding('ascii');
-
-        var data = '';
+        var data = new Buffer(0);
         req.on('data', function(chunk) {
-            data = data + chunk;
+            data = Buffer.concat([data, chunk], data.length + chunk.length);
         });
         req.on('end', function() {
             datastore.put(req.params.channel, data, function(err, result) {
@@ -106,8 +100,6 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.get('/queue/:channel', function(req, res, next) {
-        req.setEncoding('ascii');
-
         var params = url.parse(req.url, true);
         var timeout = params.query.timeout || -1;
         datastore.take(req.params.channel, timeout, function(err, result) {
@@ -123,11 +115,9 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.post('/queue/:channel/:uuid', function(req, res, next) {
-        req.setEncoding('ascii');
-
-        var data = '';
+        var data = new Buffer(0);
         req.on('data', function(chunk) {
-            data = data + chunk;
+            data = Buffer.concat(data, chunk);
         });
         req.on('end', function() {
             datastore.respond(req.params.channel, req.params.uuid, data, function(err, uuid) {
@@ -144,8 +134,6 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.get('/queue/response/:uuid', function(req, res, next) {
-        req.setEncoding('ascii');
-
         var params = url.parse(req.url, true);
         var timeout = params.query.timeout || -1;
         datastore.wait(req.params.uuid, timeout, function(err, result) {

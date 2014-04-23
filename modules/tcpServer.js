@@ -6,8 +6,7 @@ var net = require('net');
 var _ = require('lodash');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
-
-var MAX_BUFFER_SIZE = (1024*64);
+var hiredis = require('hiredis');
 
 /*
  var EventEmitter = require('events').EventEmitter;
@@ -28,86 +27,29 @@ function Client(datastore, conn) {
     this.conn = conn;
     this.open = true;
     this.callInProgress = false;
-    this.buffer = '';
-    this.len = 0;
-    this.waitingFor = -1;
-    this.args = [];
+    this.reader = new hiredis.Reader({return_buffers: true});
+    this.args = undefined;
 }
 
 // *2\r\n$4\r\nSEND\r\n$<num>\r\n<channel>
 
 Client.prototype.handleData = function(data) {
-    var len, newline;
-    this.buffer = this.buffer + data;
-
-    while (this.open && this.buffer.length > 0 && !this.callInProgress) {
-        var buffer = this.buffer;
-        if (this.len == 0) {
-            newline = this.buffer.indexOf('\r\n');
-            if (newline < 0) {
-                if (buffer.length > MAX_BUFFER_SIZE) {
-                    this.open = false;
-                    this.conn.end('input buffer too big', 'ascii');
-                }
-                break;
-            }
-
-            if (buffer[0] != '*') {
-                this.open = false;
-                this.conn.end('invalid input prefix', 'ascii');
-                break;
-            }
-
-            len = parseInt(buffer.slice(1,newline));
-            if (_.isNaN(len) || len > 1024*1024) {
-                this.open = false;
-                this.conn.end('invalid input length', 'ascii');
-                break;
-            }
-            this.len = len;
-
-            buffer = this.buffer = buffer.slice(newline+2);
+    this.reader.feed(data);
+    if (this.open && !this.callInProgress) {
+        try {
+            this.args = this.reader.get();
+        } catch (e) {
+            this.open = false;
+            this.conn.end('-'+e, 'ascii');
+            return;
         }
+    }
 
-        while (this.len > 0) {
-            if (this.waitingFor < 0) {
-                newline = buffer.indexOf('\r\n');
-                if (newline < 0) {
-                    if (buffer.length > MAX_BUFFER_SIZE) {
-                        this.open = false;
-                        this.conn.end('input buffer too big', 'ascii');
-                    }
-
-                    break;
-                }
-
-                if (buffer[0] != '$') {
-                    this.open = false;
-                    this.conn.end('expected $', 'ascii');
-                    break;
-                }
-
-                len = parseInt(buffer.slice(1, newline));
-                if (_.isNaN(len) || len < 0 || len > 512*1024*1024) {
-                    this.open = false;
-                    this.conn.end('invalid input length', 'ascii');
-                    break;
-                }
-                this.waitingFor = len;
-                buffer = this.buffer = buffer.slice(newline+2);
-            }
-
-            if (buffer.length < this.waitingFor+2) {
-                break;
-            }
-
-            this.args.push(buffer.slice(0, this.waitingFor));
-            buffer = this.buffer = buffer.slice(this.waitingFor+2);
-            this.waitingFor = -1;
-            this.len--;
-        }
-
-        if (this.len == 0 && this.args.length > 0) {
+    if (this.args !== undefined) {
+        if (!_.isArray(this.args)) {
+            this.open = false;
+            this.conn.end('-MALFORMED COMMAND', 'ascii');
+        } else {
             this.callInProgress = true;
             this.processCommand();
         }
@@ -115,11 +57,17 @@ Client.prototype.handleData = function(data) {
 };
 
 Client.prototype.processCommand = function() {
-    var cmd = this.args[0].toLowerCase();
+    var cmd = this.args[0].toString().toLowerCase();
 
     var cmdPtr = this.datastore.commands[cmd];
     if (cmdPtr && cmdPtr.arity == this.args.length-1) {
-        var args = _.rest(this.args);
+        var args = _.map(_.rest(this.args), function(arg, idx) {
+            if (_.contains(cmdPtr.bufferArgs, idx)) {
+                return arg;
+            } else {
+                return arg.toString();
+            }
+        });
         var self = this;
         args.push(function() {self.respond.apply(self, arguments)});
         cmdPtr.fn.apply(this.datastore, args)
@@ -134,6 +82,10 @@ function writeValue(conn, value) {
         _.each(value, function(arg) {
             writeValue(conn, arg);
         })
+    } else if (Buffer.isBuffer(value)) {
+        conn.write('$'+value.length+'\r\n');
+        conn.write(value);
+        conn.write('\r\n');
     } else if (_.isObject(value)) {
         var pairs = _.pairs(value);
         conn.write('*'+pairs.length*2+'\r\n');
@@ -152,9 +104,7 @@ function writeValue(conn, value) {
 
 Client.prototype.respond = function() {
     this.callInProgress = false;
-    this.len = 0;
-    this.waitingFor = -1;
-    this.args = [];
+    this.args = undefined;
 
     if (arguments[0]) {
         this.conn.write('-'+arguments[0]+'\r\n');
@@ -183,11 +133,9 @@ exports.create = function(datastore, options) {
         }
     };
 
-
     var tcpServer = net.createServer(options, function(conn) {
         var client = new Client(datastore, conn);
         clients.push(client);
-        conn.setEncoding('ascii');
         conn.on('error', function() {
             client.open = false;
             removeClient(client);

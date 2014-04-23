@@ -11,14 +11,15 @@ function Datastore(pools) {
     this.commands = {
         'send' : {
             arity: 2,
-            fn: this.send
+            fn: this.send,
+            bufferArgs: [1]
         },
         'receive' : {
             arity: 2,
             fn: this.receive
         },
         'peek' : {
-            artiy: 2,
+            arity: 2,
             fn: this.peek
         },
         'delete' : {
@@ -31,7 +32,8 @@ function Datastore(pools) {
         },
         'put' : {
             arity: 2,
-            fn: this.put
+            fn: this.put,
+            bufferArgs: [1]
         },
         'take' : {
             arity: 2,
@@ -39,7 +41,8 @@ function Datastore(pools) {
         },
         'respond' : {
             arity: 3,
-            fn: this.respond
+            fn: this.respond,
+            bufferArgs: [2]
         },
         'wait' : {
             arity: 2,
@@ -111,7 +114,7 @@ function pollChannel(channel, timeout, release, cb ) {
                     return cb(err, uuid);
                 }
 
-                client.hget(channel + ":data", uuid, function (err, reply) {
+                client.hget(channel + ":data", new Buffer(uuid, 'ascii'), function (err, reply) {
                     pool.release(client);
                     cb(err, {uuid: uuid, data: reply});
                 });
@@ -123,7 +126,7 @@ function pollChannel(channel, timeout, release, cb ) {
                     return cb(err, uuid);
                 }
 
-                client.hget(channel + ":data", uuid, function (err, reply) {
+                client.hget(channel + ":data", new Buffer(uuid, 'ascii'), function (err, reply) {
                     pool.release(client);
                     cb(err, {uuid: uuid, data: reply});
                 });
@@ -168,7 +171,7 @@ Datastore.prototype.touch = function(channel, uuid, cb) {
 
         // KEYS: channel:reserved channel:pending channel:ttl
         // ARGS: uuid, now
-        client.evalsha(pools.getScript('touch'), 4, channel+":reserved", channel+":pending", channel+":ttl", channel+":data", uuid, Date.now(), function(err, reply) {
+        client.evalsha(pools.getScript('touch'), 4, channel+":reserved", channel+":pending", channel+":ttl", channel+":data", new Buffer(uuid), Date.now(), function(err, reply) {
             pool.release(client);
             cb(err, reply);
         })
@@ -212,7 +215,8 @@ Datastore.prototype.put = function(channel, data, cb) {
         // Lock response channel
         // send data to request channel with response uuid prepended
         // return response uuid
-        self.send(channel, responseUUID+data, function(err) {
+        var buff = Buffer.concat([uuid.parse(responseUUID, new Buffer(16)), data], data.length + 16);
+        self.send(channel, buff, function(err) {
             if (err) {
                 return cb(err);
             }
@@ -236,7 +240,7 @@ Datastore.prototype.take = function(channel, timeout, cb) {
         } else {
             cb(null, {
                 request: result.uuid,
-                data: result.data.substr(36)
+                data: result.data.slice(16)
             });
         }
     })
@@ -249,7 +253,7 @@ Datastore.prototype.respond = function(channel, requestUUID, data, cb) {
         if (err || !res) {
             return cb(err, res);
         }
-        var responseUUID = res.substr(0, 36);
+        var responseUUID = uuid.unparse(res.slice(0, 16));
         // send data on responseUuuid
         self.send(responseUUID, data, function(err, result) {
             if (err) {

@@ -14,6 +14,9 @@ function Pools(poolMap, mapFn) {
     }
     var pools = this.pools = {};
     _.each(poolMap, function(config, key) {
+        config = config || {};
+        config.redis_options = config.redis_options || {};
+        config.redis_options.detect_buffers = true;
         pools[key] = new redisPool(config);
     });
     this.mapFn = mapFn || function() {return 'default'};
