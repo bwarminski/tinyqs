@@ -1,0 +1,170 @@
+Low level datastore
+
+Given a datastore and a channel
+When send is called on that channel
+A UUID is generated
+The UUID is last in the channel's queue
+The message data is properly stored
+
+Verify null channel and null data are errors
+
+Given a datastore and a channel with at least one message
+When receive is called on the channel
+The message data and correct uuid is returned
+The message uuid is no longer in the queue
+
+Given a datastore and a channel with at least one message
+When peek is called on the channel
+The message data and correct uuid is returned
+The message uuid is still at the head of the queue
+
+Given a datastore and a channel with no messages
+When receive is called on the channel with a finite timeout
+No message is returned
+
+Given a datastore and a channel with no messages
+When peek is called on the channel with a finite timeout
+No message is returned
+
+Given a datastore and a channel with no messages and two clients, A and B
+When receive is called on the channel with an infinite timeout by client A
+No message is returned at first
+When client B inserts a message
+That message is returned
+The message uuid is no longer in the queue
+
+Given a datastore and a channel with no messages and two clients, A and B
+When peek is called on the channel with an infinite timeout by client A
+No message is returned at first
+When client B inserts a message
+That message is returned
+The message uuid is still at the head of the queue
+
+Verify null channel, null and negative timeouts are errors
+
+Given a datastore and a channel with at least one message (pre-tick, post-tick and not received)
+When delete is called on that message
+The call is successful
+The message uuid is not present in the queue
+The message data has been cleared
+
+Given a datastore and a channel
+When delete is called on a message that does not exist
+The call is successful, but the missing message is indicated to the client
+
+Given a datastore with two channels
+When delete is called on a message on channel A that is present in channel B (pre-tick, post-tick and not received)
+The call is successful, but the missing message is indicated to the client
+No data has been cleared and the message stays in the same place
+
+Verify null channel and null delete
+
+Given a datastore and a channel with one reserved message (pre-tick, post-tick)
+When touch is called on that message
+The call is successful, the message's ttl is adjusted and the data is returned
+
+Given a datastore and a channel with a non-reserved message
+When touch is called on that message
+The call is successful, but a missing message is indicated to the client
+No data or TTLS are adjusted
+
+Given a datastore and a channel with no messages / a message that is not being touched
+When touch is called on that message
+The call is successful, but a missing message is indicated to the client
+No data or TTLS are adjusted
+
+Given a datastore with two channels
+When touch is called on a message on channel A that is present in channel B (pre-tick, post-tick and not received)
+The call is successful, but a missing message is indicated to the client
+No data or TTLS are adjusted
+
+Verify null channel and null uuid are errors
+
+Given a datastore and a channel with reserved messages that are past their ttl
+When tick is called, the reserved messages are moved back into the active queue
+
+Perform send -> receive/peek -> [touch] -> [tick] -> delete n times
+Verify that all n messages are received and deleted
+Verify that data and queues are clear at the end of operation
+
+Bench (http://blog.x-aeon.com/2013/04/10/a-quick-message-queue-benchmark-activemq-rabbitmq-hornetq-qpid-apollo/)
+send 20,000 messages of 1024 bytes
+then receive all
+then delete all
+
+send 20,000 messages of 1024 bytes
+then receive-delete all
+
+simultaneously send receive delete 20,000 messages of 1024 bytes
+
+simultaneously send receive delete 200,000 messages of 32 bytes
+
+simultaneously send receive delete 200 messages of 32768 bytes each
+
+Given a datastore and a channel
+When put is called on that channel
+a uuid is added to the data to identify the response channel
+The response channel is locked
+send is called with that data
+
+Given an in-use response channel uuid
+a response with that uuid is not enqueued
+
+Verify null channel and null data are errors
+
+Given a datastore and a channel with at least one message
+When take is called on the channel, receive is called
+The message data and correct uuid is returned
+
+Verify null channel, null and negative timeouts are errors
+
+Given a datastore and a channel with at least one message (pre-tick, post-tick and not received)
+When respond is called on that message
+Send is called on the response channel
+Delete is called on the request channel
+
+Given a datastore and a channel
+When respond is called on a message that does not exist
+Neither send nor delete is called
+
+Given a datastore with two channels
+When respond is called on a message on channel A that is present in channel B (pre-tick, post-tick and not received)
+Neither send nor delete is called
+
+Verify null channel and null delete
+
+Given a datastore and a channel with at least one message
+When wait is called on the channel
+Peek is called on the channel
+And the message data is returned
+And the channel and lock is set to expire
+
+Given a datastore and a channel with no messages
+Peek is called on the channel
+And the channel and lock are not set to expire
+No message is returned
+
+Given a datastore and a channel with no messages and two clients, A and B
+When peek is called on the channel with an infinite timeout by client A
+No message is returned at first
+When client B responds to that message
+That message is returned
+The channel and lock is set to expire
+
+Verify null channel, null and negative timeouts are errors
+
+Perform put -> take -> [tick] -> wait -> [tick] n times
+Verify that all n messages are received and deleted
+Verify that data and queues are clear at the end of operation
+
+Bench (http://blog.x-aeon.com/2013/04/10/a-quick-message-queue-benchmark-activemq-rabbitmq-hornetq-qpid-apollo/)
+put 20,000 messages of 1024 bytes
+then take all
+then respond all
+then wait all
+
+simultaneously put-wait take-respond 20,000 messages of 1024 bytes
+
+simultaneously put-wait take-respond 200,000 messages of 32 bytes
+
+simultaneously put-wait take-respond 200 messages of 32768 bytes each
