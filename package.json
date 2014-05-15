@@ -15,5 +15,12 @@
         "async" : "*",
         "luamin" : ">=0.1.4",
         "restify" : "~2.7.0"
+    },
+    "devDependencies": {
+        "chai" : ">= 1.9.1",
+        "mocha" : ">= 1.18",
+        "sinon" : ">= 1.9.1",
+        "sinon-chai" : ">= 2.5.0"
+
     }
 }

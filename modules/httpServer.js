@@ -70,7 +70,7 @@ exports.create = function(datastore, options) {
     });
 
     httpServer.put('/channel/:channel/:uuid', function(req, res, next) {
-        datastore.touch(req.params.channel, req.params.uuid, function(err, result) {
+        datastore.touch(req.params.channel, req.params.uuid, req.params.timestamp || Date.now(), function(err, result) {
             if (err) {
                 res.send(500, err);
             } else if (!result) {

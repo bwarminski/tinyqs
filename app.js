@@ -4,7 +4,7 @@
  */
 
 var Pools = require('./modules/pools');
-var Datastore = require('./modules/datastore');
+var Datastore = require('./modules/putTakeDatastore');
 var tcpServer = require('./modules/tcpServer');
 var httpServer = require('./modules/httpServer');
 
@@ -21,6 +21,6 @@ pools.init(function(err) {
         restServer.listen(8000, function() {
             console.log('REST server started');
         });
-        setInterval(function() { datastore.tick() }, 100000);
+        setInterval(function() { datastore.tick(Date.now()) }, 100000);
     }
 });

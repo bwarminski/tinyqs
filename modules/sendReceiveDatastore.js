@@ -3,11 +3,16 @@
  */
 
 var async = require('async');
-var UUID = require('node-uuid');
 var _ = require('lodash');
 
-function Datastore(pools) {
+function Datastore(pools, options) {
     this.pools = pools;
+    if (options && options.uuid) {
+        this.uuid = options.uuid;
+    } else {
+        this.uuid = require('node-uuid');
+    }
+
     this.commands = {
         'send' : {
             arity: 2,
@@ -27,7 +32,7 @@ function Datastore(pools) {
             fn : this.delete
         },
         'touch' : {
-            arity: 2,
+            arity: 3,
             fn: this.touch
         },
         'put' : {
@@ -56,8 +61,15 @@ function Datastore(pools) {
 // *2\r\n$4\r\nSEND\r\n$<num>\r\n<channel>
 // POST /channel/:channel
 Datastore.prototype.send = function(channel, message, cb) {
+    if (!_.isFunction(cb)) {
+        throw "Expected callback function"
+    }
+    if (!channel || !message || !_.isFunction(cb)) {
+        return cb(new Error("invalid arguments"));
+    }
     var pools = this.pools;
     var pool = this.pools.channel(channel);
+    var self = this;
     pool.acquire(function(err, client) {
         if (err) {
             return cb(err);
@@ -69,7 +81,7 @@ Datastore.prototype.send = function(channel, message, cb) {
         async.doUntil(function(cb) {
             // KEYS: channel:active, channel:data
             // ARGS: uuid data
-            uuid = UUID.v4();
+            uuid = self.uuid.v4();
             client.evalsha(pools.getScript('send'), 2, channel+":active", channel+":data", uuid, message, function(err, reply) {
                 if (err) {
                     cb(err);
@@ -91,15 +103,16 @@ Datastore.prototype.send = function(channel, message, cb) {
 
 // GET /channel/:channel - next
 function pollChannel(channel, timeout, release, cb ) {
+    if (!_.isFunction(cb)) {
+        throw "Expected callback"
+    }
+    if (!channel || !_.isFinite(timeout)) {
+        return cb(new Error("invalid arguments"));
+    }
     var pool = this.pools.channel(channel);
     pool.acquire(function (err, client) {
         if (err) {
             return cb(err);
-        }
-
-        if (_.isFunction(timeout)) {
-            cb = timeout;
-            timeout = -1;
         }
 
         timeout = parseInt(timeout);
@@ -145,6 +158,12 @@ Datastore.prototype.peek = function(channel, timeout, cb) {
 
 // DELETE /channel/:channel/:uuid
 Datastore.prototype.delete = function(channel, uuid, cb) {
+    if (!_.isFunction(cb)) {
+        throw "Expected callback"
+    }
+    if (!channel || !uuid) {
+        return cb(new Error("invalid arguments"));
+    }
     var pools = this.pools;
     var pool = this.pools.channel(channel);
     pool.acquire(function(err, client) {
@@ -161,7 +180,13 @@ Datastore.prototype.delete = function(channel, uuid, cb) {
     });
 };
 
-Datastore.prototype.touch = function(channel, uuid, cb) {
+Datastore.prototype.touch = function(channel, uuid, timestamp, cb) {
+    if (!_.isFunction(cb)) {
+        throw "Expected callback"
+    }
+    if (!channel || !uuid || !_.isFinite(timestamp)) {
+        return cb(new Error("invalid arguments"));
+    }
     var pools = this.pools;
     var pool = pools.channel(channel);
     pool.acquire(function(err, client) {
@@ -171,130 +196,34 @@ Datastore.prototype.touch = function(channel, uuid, cb) {
 
         // KEYS: channel:reserved channel:pending channel:ttl
         // ARGS: uuid, now
-        client.evalsha(pools.getScript('touch'), 4, channel+":reserved", channel+":pending", channel+":ttl", channel+":data", new Buffer(uuid), Date.now(), function(err, reply) {
+        client.evalsha(pools.getScript('touch'), 4, channel+":reserved", channel+":pending", channel+":ttl", channel+":data", new Buffer(uuid), timestamp, function(err, reply) {
             pool.release(client);
             cb(err, reply);
         })
     });
 };
 
-/* -- Level 2 Commands -- */
 
-Datastore.prototype.put = function(channel, data, cb) {
-    // Generate response uuid
-    var self = this;
-    var pools = this.pools;
 
-    var responseUUID;
-    var success = false;
-
-    async.doUntil(function(cb) {
-        responseUUID = UUID.v4();
-        var pool = pools.channel(responseUUID);
-        pool.acquire(function(err, client) {
-            if (err) {
-                return cb(err);
-            }
-
-            client.setnx(responseUUID, '', function(err, res) {
-                pool.release(client);
-                if (err) {
-                    return cb(err);
-                }
-                success = res != '0';
-                cb();
-            });
-        });
-    }, function() {
-        return success;
-    }, function(err) {
+Datastore.prototype.ttl = function(channel, ttl, cb) {
+    var pool = this.pools.channel(channel);
+    pool.acquire(function(err, client) {
         if (err) {
-            return cb(err);
+            cb(err);
         }
 
-        // Lock response channel
-        // send data to request channel with response uuid prepended
-        // return response uuid
-        var buff = Buffer.concat([uuid.parse(responseUUID, new Buffer(16)), data], data.length + 16);
-        self.send(channel, buff, function(err) {
-            if (err) {
-                return cb(err);
-            }
-            cb(null, {
-                uuid: responseUUID
-            });
+        client.set(channel+":ttl", ttl, function(err) {
+            pool.release(client);
+            cb(err);
         })
-    });
-};
-
-Datastore.prototype.take = function(channel, timeout, cb) {
-    // Receive on channel
-    // On successful return, split off response channel uuid and return request uuid, response uuid and data
-    this.receive(channel, timeout, function(err, result) {
-        if (err) {
-            return cb(err);
-        }
-
-        if (!result) {
-            cb(null, result);
-        } else {
-            cb(null, {
-                request: result.uuid,
-                data: result.data.slice(16)
-            });
-        }
     })
 };
 
-Datastore.prototype.respond = function(channel, requestUUID, data, cb) {
-    var self = this;
-    // Touch on channel to get response UUID
-    this.touch(channel, requestUUID, function(err, res) {
-        if (err || !res) {
-            return cb(err, res);
-        }
-        var responseUUID = uuid.unparse(res.slice(0, 16));
-        // send data on responseUuuid
-        self.send(responseUUID, data, function(err, result) {
-            if (err) {
-                return cb(err);
-            }
-
-            // delete channelUuid
-            self.delete(channel, requestUUID, _.noop);
-            cb(null, result);
-        })
-    });
-};
-
-Datastore.prototype.wait = function(uuid, timeout, cb) {
-    // Receive on uuid channel
-    var pools = this.pools;
-    this.peek(uuid, timeout, function(err, response) {
-        if (!err && response !== null) {
-            // KEYS: channel:reserved channel:pending channel:active responseUUID channel:ttl
-            var pool = pools.channel(uuid);
-            pool.acquire(function(err, client) {
-                if (!err) {
-                    client.evalsha(pools.getScript('consume'), 5, uuid+':reserved', uuid+':pending', uuid+':active', uuid, uuid+':ttl', function() {
-                        pool.release(client);
-                    })
-                }
-            });
-        }
-
-        cb(err, response);
-
-    });
-    // Set expires on lock and channel
-};
-
-Datastore.prototype.tick = function() {
+Datastore.prototype.tick = function(now, cb) {
     var channels = this.pools.channels;
     var pools = this.pools;
     // KEYS: channel:reserved channel:pending channel:active channel:ttl
     // ARGS: now
-    var now = Date.now();
 
     async.each(channels, function(channel, cb) {
         var pool = pools.channel(channel);
@@ -309,7 +238,7 @@ Datastore.prototype.tick = function() {
             });
 
         })
-    }, function() {});
+    }, cb);
 };
 
 
