@@ -1,0 +1,61 @@
+/**
+ * Created by bwarminski on 5/18/14.
+ *
+ * Config file detailing possible options.
+ */
+
+module.exports = {
+    /* -- Required -- */
+    pools: {
+        default: 'defaultPool',
+        pools: { // Key is pool name, value is redis config. The pool 'default' is used if mapFn is not defined
+            'defaultPool' : { // Options are passed to node_redis
+                // Options are passed to sol-redis-pool (https://github.com/joshuah/sol-redis-pool)
+                // See also: node_redis (https://github.com/mranney/node_redis)
+                redis_port: 6379,
+                redis_host: '127.0.0.1'
+            } /*
+            'anotherPool' : { ... }
+            */
+        },
+        mapFn: function(pools) {
+            // Factory function, given a fully constructed pools object (including command line options)
+            // return a function map(key) that will return a pool name given a key
+            return function(key) {
+                return pools.default;
+            }
+        }
+    },
+    datastore: {
+        tickInterval: 60000 // ms between ticks
+        // uuid: -- inject a module with the same api and node-uuid (primarily for testing)
+    },
+
+    /* -- Optional -- */
+    tcpServer: { // If this key is present, a tcp server will be set up
+        options: {
+            // passed directly to net.createServer()
+        },
+        listen: [4000] // Options are passed directly to net.createServer(options).listen
+        /* alternative form to listen on multiple interfaces. same format as listen() without the callback at the end
+        listen: [
+                 [4000],
+                 [4001, '192.168.1.2']
+                 ['/tmp/tinyqs.sock']
+                ]
+         */
+    },
+    httpServer: { // If this key is present, a http rest server will be set up
+        options: {
+            // passed directly to restify
+        },
+        listen: [8080] // Options are passed to restify's listen fn, which is the same as http's listen
+        /* alternative form to listen on multiple interfaces. same format as listen() without the callback at the end
+         listen: [
+         [8080],
+         [80, '192.168.1.2']
+         ['/tmp/tinyqs-http.sock']
+         ]
+         */
+    }
+}

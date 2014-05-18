@@ -7,19 +7,25 @@ var _ = require('lodash');
 var async = require('async');
 var scripts = require('../scripts');
 
-function Pools(poolMap, mapFn) {
+function Pools(config) {
     this.channels = [];
-    if (!poolMap['default']) {
-        throw "No default pool config defined"
+    if (!config.mapFn && !config.default && (!config.pools || !config.pools['default'])) {
+        throw "No default pool config defined";
     }
     var pools = this.pools = {};
-    _.each(poolMap, function(config, key) {
+    _.each(config.pools, function(config, key) {
         config = config || {};
         config.redis_options = config.redis_options || {};
         config.redis_options.detect_buffers = true;
         pools[key] = new redisPool(config);
     });
-    this.mapFn = mapFn || function() {return 'default'};
+    if (config.mapFn) {
+        this.mapFn = config.mapFn(pools);
+    } else if (config.default) {
+        this.mapFn = function() {return config.default};
+    } else {
+        this.mapFn = function() {return 'default'};
+    }
     this.scripts = {};
 }
 

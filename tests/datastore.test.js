@@ -12,7 +12,7 @@ var Datastore = require('../modules/putTakeDatastore');
 var UUID = require('node-uuid');
 var async = require('async');
 
-var pools = new Pools({default: {unix_socket: '/tmp/redis_test.sock'}});
+var pools = new Pools({pools: {default: {unix_socket: '/tmp/redis_test.sock'}}});
 
 var redis = require("redis"),
     client = redis.createClient('/tmp/redis_test.sock', undefined, {detect_buffers: true});
