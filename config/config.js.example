@@ -36,26 +36,20 @@ module.exports = {
         options: {
             // passed directly to net.createServer()
         },
-        listen: [4000] // Options are passed directly to net.createServer(options).listen
-        /* alternative form to listen on multiple interfaces. same format as listen() without the callback at the end
-        listen: [
-                 [4000],
-                 [4001, '192.168.1.2']
-                 ['/tmp/tinyqs.sock']
-                ]
+        listen:  'tcp://0.0.0.0:4000' // pseudo URL format
+        /* alternative form to listen on multiple interfaces. protocol should be either 'tcp' or 'file'. 0.0.0.0 means any IPv4
+        listen: [ 'tcp://0.0.0.0:4000',
+                  'file:/tmp/tinyqs.sock ]
          */
     },
     httpServer: { // If this key is present, a http rest server will be set up
         options: {
             // passed directly to restify
         },
-        listen: [8080] // Options are passed to restify's listen fn, which is the same as http's listen
-        /* alternative form to listen on multiple interfaces. same format as listen() without the callback at the end
-         listen: [
-         [8080],
-         [80, '192.168.1.2']
-         ['/tmp/tinyqs-http.sock']
-         ]
+        listen: 'http://localhost:8080' // pseudo URL format, protocol should be either http or file
+        /* alternative form to listen on multiple interfaces
+         listen: [ 'http://0.0.0.0:4000',
+         'file:/tmp/tinyqs.sock ]
          */
     }
 }
