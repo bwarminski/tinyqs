@@ -3,6 +3,8 @@ tinyqs
 
 A small, embeddable, distributed and reliable message/task queue built on Redis and NodeJS
 
+
+
 ## Philosophy
 
 tinyqs is an implementation of a common pattern found is software where large and/or complex tasks are sent to remote
@@ -28,23 +30,23 @@ think much about it. They can be tuned to the task size and meet the middle grou
  relational databases. Their only drawback is the cost of integrating them into existing software (or rather, integrating
  existing software into them).
 
- tinyqs hits the sweet spot between these alternatives. It handles the need for high performance by leveraging the
- speed of NodeJS and redis. Durability is achieved through redis's persistence capabilities and list primitives. The
- system is scalable because load can be partitioned between multiple redis and NodeJS instances. It's also a breeze to
- integrate into existing software because it is based on a small number of commands and can either be included as a Javascript
- module or accessed via TCP or REST APIs.
+tinyqs hits the sweet spot between these alternatives. It handles the need for high performance by leveraging the
+speed of NodeJS and redis. Durability is achieved through redis's persistence capabilities and list primitives. The
+system is scalable because load can be partitioned between multiple redis and NodeJS instances. It's also a breeze to
+integrate into existing software because it is based on a small number of commands and can either be included as a Javascript
+module or accessed via TCP or REST APIs.
 
- ### What about resque, sidekiq, celery, beanstalkd ... ?
+### What about resque, sidekiq, celery, beanstalkd ... ?
 
- They're all great! In fact, tinyqs takes inspiration from many of these. A few design philosophies make tinyqs
- a little different than these alternatives.
+They're all great! In fact, tinyqs takes inspiration from many of these. A few design philosophies make tinyqs
+a little different than these alternatives.
 
- - **It's implemented in NodeJS** There are relatively few solutions in the NodeJS landscape compared to the many that are
- available for Python and Ruby. NodeJS also brings some serious scalability to the table because it's event-driven.
- - **It supports multiple APIs for ease of integration** Developers have a choice of binary integration and TCP/HTTP.
- - **It is more primitive in many ways** tinyqs does not prescribe a message format or concept of priority. These are application
- level concerns. At it's heart, tinyqs is simply permutations of three different fault tolerant actions - SEND, RECEIVE
- and DELETE, with a little TOUCH thrown in to spice things up.
+- **It's implemented in NodeJS** There are relatively few solutions in the NodeJS landscape compared to the many that are
+available for Python and Ruby. NodeJS also brings some serious scalability to the table because it's event-driven.
+- **It supports multiple APIs for ease of integration** Developers have a choice of binary integration and TCP/HTTP.
+- **It is more primitive in many ways** tinyqs does not prescribe a message format or concept of priority. These are application
+level concerns. At it's heart, tinyqs is simply permutations of three different fault tolerant actions - SEND, RECEIVE
+and DELETE, with a little TOUCH thrown in to spice things up.
 
 ## Installation instructions
 
